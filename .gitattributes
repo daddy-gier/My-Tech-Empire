@@ -1,27 +1,27 @@
-﻿# 1. Auto-detect text files and perform LF normalization
-* text=auto
+﻿* text=auto
 
-# 2. Force LF for all code files to ensure cross-platform compatibility
+# Force LF for code
 *.cpp text eol=lf
-*.h text eol=lf
-*.cs text eol=lf
-*.py text eol=lf
+*.h   text eol=lf
+*.cs  text eol=lf
+*.py  text eol=lf
 *.json text eol=lf
-*.md text eol=lf
+*.md  text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
 
-# 3. Explicitly mark Unreal Engine & Unity assets as binary
-# This prevents Git from trying to modify line endings in binary files
+# Binary assets
 *.uasset binary
-*.umap binary
-*.upk binary
-*.udk binary
-*.fbx binary
-*.obj binary
-*.png binary
-*.jpg binary
-*.tga binary
-*.wav binary
-*.mp3 binary
+*.umap   binary
+*.fbx    binary
+*.obj    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.tga    binary
+*.wav    binary
+*.mp3    binary
 
-# 4. PowerShell specific (keep CRLF for Windows native execution)
+# PowerShell stays Windows-friendly
 *.ps1 text eol=crlf

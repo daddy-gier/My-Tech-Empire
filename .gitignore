@@ -1,0 +1,34 @@
+﻿# Secrets
+.env
+*.key
+*.pem
+*.pfx
+*.p12
+*mcp*.json
+BraxtonSettings.ini
+
+# Unreal build junk
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Unity junk
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+Logs/
+UserSettings/
+
+# Python junk
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Outputs
+output/
+dist/
