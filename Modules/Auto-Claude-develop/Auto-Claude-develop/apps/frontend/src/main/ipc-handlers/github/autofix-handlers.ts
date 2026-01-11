@@ -641,6 +641,8 @@ export function registerAutoFixHandlers(
             onStderr: (line) => debugLog('STDERR:', line),
             onComplete: () => {
               const batches = getBatches(project);
+            onComplete: async () => {
+              const batches = await getBatches(project);
               debugLog('Batch auto-fix completed', { batchCount: batches.length });
               sendProgress({
                 phase: 'complete',
@@ -684,6 +686,7 @@ export function registerAutoFixHandlers(
       debugLog('getBatches handler called', { projectId });
       const result = await withProjectOrNull(projectId, async (project) => {
         const batches = getBatches(project);
+        const batches = await getBatches(project);
         debugLog('Batches loaded', { count: batches.length });
         return batches;
       });
@@ -850,6 +853,7 @@ export function registerAutoFixHandlers(
           }
 
           const batches = getBatches(project);
+          const batches = await getBatches(project);
           debugLog('Batches approved and created', { count: batches.length });
 
           return { success: true, batches };
@@ -911,12 +915,14 @@ export interface AnalyzePreviewResult {
  * Get batches from disk
  */
 function getBatches(project: Project): IssueBatch[] {
+async function getBatches(project: Project): Promise<IssueBatch[]> {
   const batchesDir = path.join(getGitHubDir(project), 'batches');
 
   // Use try/catch instead of existsSync to avoid TOCTOU race condition
   let files: string[];
   try {
     files = fs.readdirSync(batchesDir);
+    files = await fs.promises.readdir(batchesDir);
   } catch {
     // Directory doesn't exist or can't be read
     return [];
@@ -928,6 +934,8 @@ function getBatches(project: Project): IssueBatch[] {
     if (file.startsWith('batch_') && file.endsWith('.json')) {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(batchesDir, file), 'utf-8'));
+        const content = await fs.promises.readFile(path.join(batchesDir, file), 'utf-8');
+        const data = JSON.parse(content);
         batches.push({
           batchId: data.batch_id,
           repo: data.repo,
