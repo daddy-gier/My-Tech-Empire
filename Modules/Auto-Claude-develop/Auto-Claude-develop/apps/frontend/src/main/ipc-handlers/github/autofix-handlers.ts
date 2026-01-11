@@ -8,8 +8,7 @@
  * 4. Creating PRs when complete
  */
 
-import { ipcMain } from 'electron';
-import type { BrowserWindow } from 'electron';
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type IpcMainEvent } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { IPC_CHANNELS } from '../../../shared/constants';
@@ -27,7 +26,7 @@ import {
   buildRunnerArgs,
   parseJSONFromOutput,
 } from './utils/subprocess-runner';
-import { AgentManager } from '../../agent/agent-manager';
+import { AgentManager } from '../../agent';
 
 // Debug logging
 const { debug: debugLog } = createContextLogger('GitHub AutoFix');
@@ -170,13 +169,13 @@ function saveAutoFixConfig(project: Project, config: AutoFixConfig): void {
 /**
  * Get the auto-fix queue for a project
  */
-function getAutoFixQueue(project: Project): AutoFixQueueItem[] {
+async function getAutoFixQueue(project: Project): Promise<AutoFixQueueItem[]> {
   const issuesDir = path.join(getGitHubDir(project), 'issues');
 
   // Use try/catch instead of existsSync to avoid TOCTOU race condition
   let files: string[];
   try {
-    files = fs.readdirSync(issuesDir);
+    files = await fs.promises.readdir(issuesDir);
   } catch {
     // Directory doesn't exist or can't be read
     return [];
@@ -187,7 +186,8 @@ function getAutoFixQueue(project: Project): AutoFixQueueItem[] {
   for (const file of files) {
     if (file.startsWith('autofix_') && file.endsWith('.json')) {
       try {
-        const data = JSON.parse(fs.readFileSync(path.join(issuesDir, file), 'utf-8'));
+        const content = await fs.promises.readFile(path.join(issuesDir, file), 'utf-8');
+        const data = JSON.parse(content);
         queue.push({
           issueNumber: data.issue_number,
           repo: data.repo,
@@ -223,23 +223,37 @@ async function checkAutoFixLabels(project: Project): Promise<number[]> {
     return [];
   }
 
-  // Fetch open issues
-  const issues = await githubFetch(
-    ghConfig.token,
-    `/repos/${ghConfig.repo}/issues?state=open&per_page=100`
-  ) as Array<{
+  // Fetch open issues with pagination
+  const allIssues: Array<{
     number: number;
     labels: Array<{ name: string }>;
     pull_request?: unknown;
-  }>;
+  }> = [];
+
+  let page = 1;
+  while (true) {
+    const issues = await githubFetch(
+      ghConfig.token,
+      `/repos/${ghConfig.repo}/issues?state=open&per_page=100&page=${page}`
+    ) as Array<{
+      number: number;
+      labels: Array<{ name: string }>;
+      pull_request?: unknown;
+    }>;
+
+    if (!Array.isArray(issues) || issues.length === 0) break;
+    allIssues.push(...issues);
+    if (issues.length < 100) break;
+    page++;
+  }
 
   // Filter for issues (not PRs) with matching labels
-  const queue = getAutoFixQueue(project);
+  const queue = await getAutoFixQueue(project);
   const pendingIssues = new Set(queue.map(q => q.issueNumber));
 
   const matchingIssues: number[] = [];
 
-  for (const issue of issues) {
+  for (const issue of allIssues) {
     // Skip pull requests
     if (issue.pull_request) continue;
 
@@ -263,7 +277,7 @@ async function checkAutoFixLabels(project: Project): Promise<number[]> {
 /**
  * Check for NEW issues not yet in the auto-fix queue (no labels required)
  */
-async function checkNewIssues(project: Project): Promise<Array<{number: number}>> {
+async function checkNewIssues(project: Project): Promise<Array<{ number: number }>> {
   const config = getAutoFixConfig(project);
   if (!config.enabled) {
     return [];
@@ -278,12 +292,12 @@ async function checkNewIssues(project: Project): Promise<Array<{number: number}>
   const backendPath = validation.backendPath!;
   const args = buildRunnerArgs(getRunnerPath(backendPath), project.path, 'check-new');
 
-  const { promise } = runPythonSubprocess<Array<{number: number}>>({
+  const { promise } = runPythonSubprocess<Array<{ number: number }>>({
     pythonPath: getPythonPath(backendPath),
     args,
     cwd: backendPath,
     onComplete: (stdout) => {
-      return parseJSONFromOutput<Array<{number: number}>>(stdout);
+      return parseJSONFromOutput<Array<{ number: number }>>(stdout);
     },
   });
 
@@ -432,7 +446,7 @@ function convertAnalyzePreviewResult(result: Record<string, unknown>): AnalyzePr
     alreadyBatched: result.already_batched as number ?? 0,
     proposedBatches: (result.proposed_batches as Array<Record<string, unknown>> ?? []).map((b) => ({
       primaryIssue: b.primary_issue as number,
-      issues: (b.issues as Array<Record<string, unknown>>).map((i) => ({
+      issues: (b.issues as Array<Record<string, unknown>> ?? []).map((i) => ({
         issueNumber: i.issue_number as number,
         title: i.title as string,
         labels: i.labels as string[] ?? [],
@@ -467,7 +481,7 @@ export function registerAutoFixHandlers(
   // Get auto-fix config
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_AUTOFIX_GET_CONFIG,
-    async (_, projectId: string): Promise<AutoFixConfig | null> => {
+    async (_: IpcMainInvokeEvent, projectId: string): Promise<AutoFixConfig | null> => {
       debugLog('getAutoFixConfig handler called', { projectId });
       return withProjectOrNull(projectId, async (project) => {
         const config = getAutoFixConfig(project);
@@ -480,7 +494,7 @@ export function registerAutoFixHandlers(
   // Save auto-fix config
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_AUTOFIX_SAVE_CONFIG,
-    async (_, projectId: string, config: AutoFixConfig): Promise<boolean> => {
+    async (_: IpcMainInvokeEvent, projectId: string, config: AutoFixConfig): Promise<boolean> => {
       debugLog('saveAutoFixConfig handler called', { projectId, enabled: config.enabled });
       const result = await withProjectOrNull(projectId, async (project) => {
         saveAutoFixConfig(project, config);
@@ -494,10 +508,10 @@ export function registerAutoFixHandlers(
   // Get auto-fix queue
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_AUTOFIX_GET_QUEUE,
-    async (_, projectId: string): Promise<AutoFixQueueItem[]> => {
+    async (_: IpcMainInvokeEvent, projectId: string): Promise<AutoFixQueueItem[]> => {
       debugLog('getAutoFixQueue handler called', { projectId });
       const result = await withProjectOrNull(projectId, async (project) => {
-        const queue = getAutoFixQueue(project);
+        const queue = await getAutoFixQueue(project);
         debugLog('AutoFix queue loaded', { count: queue.length });
         return queue;
       });
@@ -508,7 +522,7 @@ export function registerAutoFixHandlers(
   // Check for issues with auto-fix labels
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_AUTOFIX_CHECK_LABELS,
-    async (_, projectId: string): Promise<number[]> => {
+    async (_: IpcMainInvokeEvent, projectId: string): Promise<number[]> => {
       debugLog('checkAutoFixLabels handler called', { projectId });
       const result = await withProjectOrNull(projectId, async (project) => {
         const issues = await checkAutoFixLabels(project);
@@ -522,7 +536,7 @@ export function registerAutoFixHandlers(
   // Check for NEW issues not yet in auto-fix queue (no labels required)
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_AUTOFIX_CHECK_NEW,
-    async (_, projectId: string): Promise<Array<{number: number}>> => {
+    async (_: IpcMainInvokeEvent, projectId: string): Promise<Array<{ number: number }>> => {
       debugLog('checkNewIssues handler called', { projectId });
       const result = await withProjectOrNull(projectId, async (project) => {
         const issues = await checkNewIssues(project);
@@ -536,7 +550,7 @@ export function registerAutoFixHandlers(
   // Start auto-fix for an issue
   ipcMain.on(
     IPC_CHANNELS.GITHUB_AUTOFIX_START,
-    async (_, projectId: string, issueNumber: number) => {
+    async (_: IpcMainEvent, projectId: string, issueNumber: number) => {
       debugLog('startAutoFix handler called', { projectId, issueNumber });
       const mainWindow = getMainWindow();
       if (!mainWindow) {
@@ -569,7 +583,7 @@ export function registerAutoFixHandlers(
   // Batch auto-fix for multiple issues
   ipcMain.on(
     IPC_CHANNELS.GITHUB_AUTOFIX_BATCH,
-    async (_, projectId: string, issueNumbers?: number[]) => {
+    async (_: IpcMainEvent, projectId: string, issueNumbers?: number[]) => {
       debugLog('batchAutoFix handler called', { projectId, issueNumbers });
       const mainWindow = getMainWindow();
       if (!mainWindow) {
@@ -666,7 +680,7 @@ export function registerAutoFixHandlers(
   // Get batches for a project
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_AUTOFIX_GET_BATCHES,
-    async (_, projectId: string): Promise<IssueBatch[]> => {
+    async (_: IpcMainInvokeEvent, projectId: string): Promise<IssueBatch[]> => {
       debugLog('getBatches handler called', { projectId });
       const result = await withProjectOrNull(projectId, async (project) => {
         const batches = getBatches(project);
@@ -680,7 +694,7 @@ export function registerAutoFixHandlers(
   // Analyze issues and preview proposed batches (proactive workflow)
   ipcMain.on(
     IPC_CHANNELS.GITHUB_AUTOFIX_ANALYZE_PREVIEW,
-    async (_, projectId: string, issueNumbers?: number[], maxIssues?: number) => {
+    async (_: IpcMainEvent, projectId: string, issueNumbers?: number[], maxIssues?: number) => {
       debugLog('analyzePreview handler called', { projectId, issueNumbers, maxIssues });
       const mainWindow = getMainWindow();
       if (!mainWindow) {
@@ -787,12 +801,11 @@ export function registerAutoFixHandlers(
   // Approve and execute selected batches
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_AUTOFIX_APPROVE_BATCHES,
-    async (_, projectId: string, approvedBatches: Array<Record<string, unknown>>): Promise<{ success: boolean; batches?: IssueBatch[]; error?: string }> => {
+    async (_: IpcMainInvokeEvent, projectId: string, approvedBatches: Array<Record<string, unknown>>): Promise<{ success: boolean; batches?: IssueBatch[]; error?: string }> => {
       debugLog('approveBatches handler called', { projectId, batchCount: approvedBatches.length });
       const result = await withProjectOrNull(projectId, async (project) => {
+        const tempFile = path.join(getGitHubDir(project), `temp_approved_batches_${Date.now()}_${Math.floor(Math.random() * 1000)}.json`);
         try {
-          const tempFile = path.join(getGitHubDir(project), 'temp_approved_batches.json');
-
           // Convert camelCase to snake_case for Python
           const pythonBatches = approvedBatches.map(b => ({
             primary_issue: b.primaryIssue,
@@ -818,15 +831,23 @@ export function registerAutoFixHandlers(
           }
 
           const backendPath = validation.backendPath!;
-          const { execFileSync } = await import('child_process');
-          // Use execFileSync with arguments array to prevent command injection
-          execFileSync(
-            getPythonPath(backendPath),
-            [getRunnerPath(backendPath), '--project', project.path, 'approve-batches', tempFile],
-            { cwd: backendPath, encoding: 'utf-8' }
-          );
 
-          fs.unlinkSync(tempFile);
+          // Use runPythonSubprocess instead of blocking execFileSync
+          const args = buildRunnerArgs(getRunnerPath(backendPath), project.path, 'approve-batches', [tempFile]);
+
+          const { promise } = runPythonSubprocess<void>({
+            pythonPath: getPythonPath(backendPath),
+            args,
+            cwd: backendPath,
+            onStdout: (line) => debugLog('Approve batches STDOUT:', line),
+            onStderr: (line) => debugLog('Approve batches STDERR:', line),
+          });
+
+          const procResult = await promise;
+
+          if (!procResult.success) {
+            throw new Error(procResult.error || 'Failed to approve batches');
+          }
 
           const batches = getBatches(project);
           debugLog('Batches approved and created', { count: batches.length });
@@ -835,6 +856,14 @@ export function registerAutoFixHandlers(
         } catch (error) {
           debugLog('Approve batches failed', { error: error instanceof Error ? error.message : error });
           return { success: false, error: error instanceof Error ? error.message : 'Failed to approve batches' };
+        } finally {
+          if (fs.existsSync(tempFile)) {
+            try {
+              fs.unlinkSync(tempFile);
+            } catch (e) {
+              debugLog('Failed to delete temp file', { error: e });
+            }
+          }
         }
       });
       return result ?? { success: false, error: 'Project not found' };

@@ -8,6 +8,8 @@ CLI commands for workspace management (merge, review, discard, list, cleanup)
 import subprocess
 import sys
 from pathlib import Path
+import os
+import re
 
 # Ensure parent directory is in path for imports (before other imports)
 _PARENT_DIR = Path(__file__).parent.parent
@@ -22,7 +24,6 @@ from core.workspace.git_utils import (
     get_merge_base,
     is_lock_file,
 )
-from debug import debug_warning
 from ui import (
     Icons,
     icon,
@@ -56,8 +57,6 @@ def _detect_default_branch(project_dir: Path) -> str:
     Returns:
         The detected default branch name
     """
-    import os
-
     # 1. Check for DEFAULT_BRANCH env var
     env_branch = os.getenv("DEFAULT_BRANCH")
     if env_branch:
@@ -146,6 +145,7 @@ try:
         debug_section,
         debug_success,
         debug_verbose,
+        debug_warning,
         is_debug_enabled,
     )
 except ImportError:
@@ -172,6 +172,10 @@ except ImportError:
 
     def debug_section(*args, **kwargs):
         """Fallback debug_section function when debug module is not available."""
+        pass
+
+    def debug_warning(*args, **kwargs):
+        """Fallback debug_warning function when debug module is not available."""
         pass
 
     def is_debug_enabled():
@@ -371,8 +375,6 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
         - base_branch: str
         - spec_branch: str
     """
-    import subprocess
-
     debug(MODULE, "Checking for git-level merge conflicts (non-destructive)...")
 
     spec_branch = f"auto-claude/{spec_name}"
@@ -454,8 +456,6 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
                 # Look for lines indicating conflicts
                 if "CONFLICT" in line:
                     # Extract file path from conflict message
-                    import re
-
                     match = re.search(
                         r"(?:Merge conflict in|CONFLICT.*?:)\s*(.+?)(?:\s*$|\s+\()",
                         line,

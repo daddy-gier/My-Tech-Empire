@@ -260,6 +260,12 @@ Environment Variables:
 
 def main() -> None:
     """Main CLI entry point."""
+    # Check for verbose flag early to configure environment
+    # This ensures setup_environment() and debug module pick it up
+    if "--verbose" in sys.argv:
+        os.environ["VERBOSE"] = "1"
+        os.environ["DEBUG"] = "1"
+
     # Set up environment first
     setup_environment()
 

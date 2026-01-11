@@ -14,14 +14,6 @@ _PARENT_DIR = Path(__file__).parent.parent
 if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
-from progress import count_subtasks
-from qa_loop import (
-    is_qa_approved,
-    print_qa_status,
-    run_qa_validation_loop,
-    should_run_qa,
-)
-from review import ReviewState, display_review_status
 from ui import (
     Icons,
     icon,
@@ -40,6 +32,8 @@ def handle_qa_status_command(spec_dir: Path) -> None:
     Args:
         spec_dir: Spec directory path
     """
+    from qa_loop import print_qa_status
+
     print_banner()
     print(f"\nSpec: {spec_dir.name}\n")
     print_qa_status(spec_dir)
@@ -52,6 +46,8 @@ def handle_review_status_command(spec_dir: Path) -> None:
     Args:
         spec_dir: Spec directory path
     """
+    from review import ReviewState, display_review_status
+
     print_banner()
     print(f"\nSpec: {spec_dir.name}\n")
     display_review_status(spec_dir)
@@ -86,6 +82,13 @@ def handle_qa_command(
         model: Model to use for QA
         verbose: Enable verbose output
     """
+    from progress import count_subtasks
+    from qa_loop import (
+        is_qa_approved,
+        run_qa_validation_loop,
+        should_run_qa,
+    )
+
     print_banner()
     print(f"\nRunning QA validation for: {spec_dir.name}")
     if not validate_environment(spec_dir):
