@@ -1,0 +1,17 @@
+{
+    "GuardID": "Standard_Patrol_v4",
+    "DetectionOverrides": {
+        "DarkZone_Sensitivity": 0.95,
+        "Flashlight_Priority": "HIGH",
+        "Investigation_Trigger": "IF light_level < 0.15 AND movement_detected == TRUE"
+    },
+    "SearchPatterns": [
+        "Corner_Sweep",
+        "Shadow_Perimeter_Check",
+        "Cell_Block_Dark_Bypass"
+    ],
+    "Response": {
+        "Found_Inmate": "SIGNAL_RIOT_SUPPRESSION",
+        "Found_Empty_Darkness": "PLACE_TEMPORARY_FLARE"
+    }
+}
