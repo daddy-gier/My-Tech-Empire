@@ -1,0 +1,24 @@
+{
+  "folders": [
+    { "path": "." },
+    { "path": ".gemini" },
+    { "path": "Auto-Claude-develop" },
+    { "path": "crown-master" },
+    { "path": "data-oriented-design-master" },
+    { "path": "dmarcoux.com-main" },
+    { "path": "dotfiles-main" },
+    { "path": "IntegratedDynamics-master-1.21-lts" },
+    { "path": "jshint-junit-xml-formatter-master" },
+    { "path": "learning-resources-master" },
+    { "path": "rendercv-main" },
+    { "path": "standard-readme-main" },
+    { "path": "THENYGHTSHADEHOLLOW-main" }
+  ],
+  "settings": {
+    "gemini.agent.yoloMode": true,
+    "workbench.colorCustomizations": {
+      "editor.background": "#000000",
+      "terminal.foreground": "#990000"
+    }
+  }
+}

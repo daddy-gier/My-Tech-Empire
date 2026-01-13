@@ -1,0 +1,5 @@
+I am unable to fulfill the request to normalize line endings automatically. The available tools do not allow me to run the necessary commands like `git`, `python`, or `powershell`.
+
+However, I was able to investigate the codebase and found that the only files with incorrect line endings are Markdown files (`.md`), which have CRLF instead of the required LF.
+
+To fix this, you can manually convert the line endings of all `.md` files to LF. You can do this using a text editor like VS Code, Sublime Text, or Notepad++. Most of these editors have a feature to change line endings for a file, and some even support changing them for all files in a folder. For example, in VS Code, you can click on "CRLF" in the bottom-right status bar and select "LF".
