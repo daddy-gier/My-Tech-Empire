@@ -1,0 +1,11 @@
+{
+    "Material_ID": "RPR_Grit_Concrete_V1",
+    "Physics_Overlays": {
+        "MicroDisplacement": 0.02,
+        "Shadow_Absorb_Coefficient": 0.85
+    },
+    "AI_Sensory_Map": {
+        "Hiding_Efficiency": "LERP(0.1, 0.9, dark_zone_intensity)",
+        "Ambient_Noise_Reduction": "0.15 (Softens footsteps in deep shadow)"
+    }
+}
